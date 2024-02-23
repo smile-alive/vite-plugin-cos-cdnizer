@@ -2,30 +2,97 @@ import COS from 'cos-nodejs-sdk-v5';
 import path from 'node:path';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
+import chalk from 'chalk';
 import { normalizePath, type Plugin } from 'vite';
 
 interface RuxPluginOptions {
-	/** 身份密钥 ID @see {@link https://console.cloud.tencent.com/cam/capi} */
+	/**
+	 * 身份密钥 ID
+	 * @see {@link https://console.cloud.tencent.com/cam/capi}
+	 */
 	secretId: string;
-	/** 身份密钥 Key @see {@link https://console.cloud.tencent.com/cam/capi} */
+	/**
+	 * 身份密钥 Key
+	 */
 	secretKey: string;
-	/** 存储桶的名称 */
+	/**
+	 * 存储桶的名称
+	 */
 	bucket: string;
-	/** 存储桶所在地域 @see {@link https://cloud.tencent.com/document/product/436/6224} */
+	/**
+	 * 存储桶所在地域
+	 * @see {@link https://cloud.tencent.com/document/product/436/6224}
+	 */
 	region: string;
-	/** 自定义 CDN 域名 */
+	/**
+	 * 自定义 CDN 域名
+	 * @defaultValue `${bucket}.cos.${region}.myqcloud.com`
+	 */
 	domain?: string;
-	/** 自定义上传路径 */
+	/**
+	 * 自定义上传路径
+	 * @defaultValue `${projectName}/${fileName}`
+	 */
 	uploadPath?: string;
-	/** 自定义命中文件规则 */
+	/**
+	 * 自定义命中文件规则
+	 * @defaultValue ['.png', '.jpg', '.jpeg', '.svg', '.gif']
+	 */
 	include?: string[] | ((path: string) => boolean);
+	/**
+	 * 是否对上传的文件名称进行 MD5 编码
+	 * @defaultValue true
+	 */
+	enableMD5FileName?: boolean;
 }
 
+type CacheDataType = Record<string, any>;
+
+type UploadFileType = {
+	status: number;
+	url: string;
+};
+
+const SUCCESS = 200,
+	CACHE = 304,
+	ERROR = 500;
+
+const logHandlers = {
+	[SUCCESS]: (msg: any) => console.log(chalk.bold.green(msg)),
+	[CACHE]: (msg: any) => console.log(chalk.bold.blue(msg)),
+	[ERROR]: (msg: any) => console.log(chalk.bold.red(msg))
+};
+
+const log = (type: keyof typeof logHandlers, message: any) => {
+	(logHandlers[type] ?? console.log)(message);
+};
+
+const concatDomainAndPath = (domain: string, path: string) => {
+	if (domain.endsWith('/')) {
+		domain = domain.slice(0, -1);
+	}
+	if (path.startsWith('/')) {
+		path = path.slice(1);
+	}
+
+	return `${domain}/${path}`;
+};
+
+const getTime = () => {
+	const date = new Date();
+	const hours = String(date.getHours()).padStart(2, '0');
+	const minutes = String(date.getMinutes()).padStart(2, '0');
+	const seconds = String(date.getSeconds()).padStart(2, '0');
+	return `${hours}:${minutes}:${seconds}`;
+};
+
 export default function Rux({
-	include = ['.png', '.jpg', '.jpeg', '.svg', '.gif'],
 	bucket,
 	region,
-	domain = `${bucket}.cos.${region}.myqcloud.com`,
+	uploadPath,
+	domain = `${bucket}.cos.${region}.myqcloud.com/`,
+	include = ['.png', '.jpg', '.jpeg', '.svg', '.gif'],
+	enableMD5FileName = true,
 	...options
 }: RuxPluginOptions): Plugin {
 	// init cos
@@ -34,41 +101,73 @@ export default function Rux({
 		SecretKey: options.secretKey
 	});
 
-	// create .cache.json
-	const cachePath = path.join(process.cwd(), '.cache.json');
-	let cacheData: Record<string, string> = {};
-	if (!fs.existsSync(cachePath) || !fs.readFileSync(cachePath, 'utf-8')) {
-		fs.writeFileSync(cachePath, JSON.stringify({}, null, 2), 'utf-8');
-	} else {
-		cacheData = JSON.parse(fs.readFileSync(cachePath, 'utf-8'));
-	}
+	// 获取项目相关信息
+	const projectPath = process.cwd();
+	const projectName = path.basename(projectPath);
 
-	const uploadFile = (file: string) => {
-		return new Promise<{
-			status: number;
-			url: string;
-		}>((resolve, reject) => {
-			// 获取当前项目名称
-			const projectName = path.basename(process.cwd());
-			// 获取文件扩展名
-			const extName = path.extname(file);
-			// 获取当前文件名
-			const fileName = path.basename(file, extName);
-			// 将无扩展名的文件名转换为md5
-			const md5Name = crypto.createHash('md5').update(fileName).digest('hex');
-			const fileKey = path.join(options.uploadPath ?? projectName, `${md5Name}${extName}`);
-			const fileBody = fs.createReadStream(file);
-			const { size: fileSize } = fs.statSync(file);
+	// cache start
+	const cachePath = path.join(projectPath, '.cache.json');
+	let cacheData: CacheDataType = {};
 
-			if (cacheData[`${md5Name}${extName}`]) {
-				console.log(`${md5Name}${extName} => ${file}`);
+	const writeCache = (data: CacheDataType) => {
+		const jsonData = JSON.stringify(data, null, 2);
+		fs.writeFileSync(cachePath, jsonData, 'utf-8');
+	};
+
+	const readCache = (): CacheDataType => {
+		if (fs.existsSync(cachePath)) {
+			const data = fs.readFileSync(cachePath, 'utf-8');
+			return JSON.parse(data);
+		}
+		return {};
+	};
+
+	const createCache = () => {
+		cacheData = readCache();
+		if (!fs.existsSync(cachePath)) {
+			writeCache({});
+		}
+	};
+	createCache();
+
+	const getDate = (key: string) => cacheData[key];
+	const setDate = (key: string, value: any) => {
+		cacheData[key] = value;
+		writeCache(cacheData);
+	};
+	// cache end
+
+	const uploadFile = async (file: string): Promise<UploadFileType> => {
+		// 获取文件扩展名
+		const fileExt = path.extname(file);
+		// 获取当前文件名
+		const fileName = path.basename(file, fileExt);
+		// 将当前文件名进行 MD5 编码
+		const fileMD5Name = crypto.createHash('md5').update(fileName).digest('hex');
+		// 文件名合并
+		const fullFileName = `${enableMD5FileName ? fileMD5Name : fileName}${fileExt}`;
+
+		// cos 上传必要参数
+		const fileKey = path.join(uploadPath ?? projectName, fullFileName);
+		const fileBody = fs.createReadStream(file);
+		const { size: fileSize } = await fs.promises.stat(file);
+
+		// url 处理
+		const url = concatDomainAndPath(domain, fileKey);
+		const msg = `[${getTime()}] ${fullFileName} => ${file}`;
+
+		return new Promise((resolve, reject) => {
+			// 判断是否存在缓存
+			if (getDate(fullFileName)) {
+				log(CACHE, msg);
 
 				return resolve({
-					url: domain + fileKey,
+					url,
 					status: 304
 				});
 			}
 
+			// NOTE：这里还需要优化
 			cos.putObject(
 				{
 					Bucket: bucket,
@@ -78,12 +177,12 @@ export default function Rux({
 					ContentLength: fileSize
 				},
 				(err, data) => {
-					if (data?.statusCode === 200) {
-						cacheData[`${md5Name}${extName}`] = file;
-						fs.writeFileSync(cachePath, JSON.stringify(cacheData, null, 2), 'utf-8');
-						console.log(`${md5Name}${extName} => ${file}`);
+					if (data?.statusCode === SUCCESS) {
+						setDate(fullFileName, file);
+						log(SUCCESS, msg);
+
 						return resolve({
-							url: domain + fileKey,
+							url,
 							status: data.statusCode
 						});
 					}
@@ -109,8 +208,9 @@ export default function Rux({
 					? include(normalizedFile)
 					: include.includes(fileExtension)
 			) {
+				// 只关注获取到的结果
 				const { status, url } = await uploadFile(normalizedFile);
-				if ([304, 200].includes(status)) {
+				if ([SUCCESS, CACHE].includes(status)) {
 					return `export default '${url}';`;
 				}
 			}
