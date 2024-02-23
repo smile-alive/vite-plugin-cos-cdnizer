@@ -1,8 +1,8 @@
-import COS from 'cos-nodejs-sdk-v5';
 import path from 'node:path';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 import chalk from 'chalk';
+import COS from 'cos-nodejs-sdk-v5';
 import { normalizePath, type Plugin } from 'vite';
 
 interface RuxPluginOptions {
@@ -44,28 +44,38 @@ interface RuxPluginOptions {
 	 * @defaultValue true
 	 */
 	enableMD5FileName?: boolean;
+	/**
+	 * 是否缓存已上传文件
+	 * @defaultValue true
+	 */
+	enableCache?: boolean;
 }
 
-type CacheDataType = Record<string, any>;
-
-type UploadFileType = {
-	status: number;
+interface UploadFileType {
 	url: string;
+	status: number;
+	message?: string;
+}
+
+type CacheDataType = Record<string, string>;
+
+//  Log
+type LogLevel = 'success' | 'cache' | 'error' | 'info';
+type LogMethods = {
+	[K in LogLevel]: (msg: any) => void;
 };
+type LogType = typeof console.log & LogMethods;
+
+const log = console.log as LogType;
+log.success = (msg) => log(chalk.bold.green(msg));
+log.cache = (msg) => log(chalk.bold.blue(msg));
+log.error = (msg) => log(chalk.bold.red(msg));
+log.info = (msg) => log(chalk.bold.gray(msg));
 
 const SUCCESS = 200,
 	CACHE = 304,
+	NOTFOUND = 404,
 	ERROR = 500;
-
-const logHandlers = {
-	[SUCCESS]: (msg: any) => console.log(chalk.bold.green(msg)),
-	[CACHE]: (msg: any) => console.log(chalk.bold.blue(msg)),
-	[ERROR]: (msg: any) => console.log(chalk.bold.red(msg))
-};
-
-const log = (type: keyof typeof logHandlers, message: any) => {
-	(logHandlers[type] ?? console.log)(message);
-};
 
 const concatDomainAndPath = (domain: string, path: string) => {
 	if (domain.endsWith('/')) {
@@ -93,6 +103,7 @@ export default function Rux({
 	domain = `${bucket}.cos.${region}.myqcloud.com/`,
 	include = ['.png', '.jpg', '.jpeg', '.svg', '.gif'],
 	enableMD5FileName = true,
+	enableCache = true,
 	...options
 }: RuxPluginOptions): Plugin {
 	// init cos
@@ -137,6 +148,14 @@ export default function Rux({
 	};
 	// cache end
 
+	const putObjectSync = (
+		params: COS.PutObjectParams
+	): Promise<[COS.CosError, COS.PutObjectResult]> => {
+		return new Promise((resolve) => {
+			cos.putObject(params, (...arg) => resolve(arg));
+		});
+	};
+
 	const uploadFile = async (file: string): Promise<UploadFileType> => {
 		// 获取文件扩展名
 		const fileExt = path.extname(file);
@@ -154,46 +173,52 @@ export default function Rux({
 
 		// url 处理
 		const url = concatDomainAndPath(domain, fileKey);
-		const msg = `[${getTime()}] ${fullFileName} => ${file}`;
+		const msg = (type: LogLevel) => `[${getTime()}] (${type}) ${fullFileName} => ${file}`;
 
-		return new Promise((resolve, reject) => {
-			// 判断是否存在缓存
-			if (getDate(fullFileName)) {
-				log(CACHE, msg);
+		// 判断是否存在缓存
+		if (enableCache && getDate(fullFileName)) {
+			log.cache(msg('cache'));
+			return {
+				url,
+				status: 304
+			};
+		}
 
-				return resolve({
-					url,
-					status: 304
-				});
-			}
-
-			// NOTE：这里还需要优化
-			cos.putObject(
-				{
-					Bucket: bucket,
-					Region: region,
-					Key: fileKey,
-					Body: fileBody,
-					ContentLength: fileSize
-				},
-				(err, data) => {
-					if (data?.statusCode === SUCCESS) {
-						setDate(fullFileName, file);
-						log(SUCCESS, msg);
-
-						return resolve({
-							url,
-							status: data.statusCode
-						});
-					}
-
-					if (err) {
-						return reject(err);
-					}
-				}
-			);
+		const [err, data] = await putObjectSync({
+			Bucket: bucket,
+			Region: region,
+			Key: fileKey,
+			Body: fileBody,
+			ContentLength: fileSize
 		});
+
+		if (err) {
+			const message = `${err.code} at ${err.message}`;
+			log.error(msg(`error: ${message}` as LogLevel));
+			return {
+				message,
+				url,
+				status: ERROR
+			};
+		}
+
+		if (data) {
+			setDate(fullFileName, file);
+			log.success(msg('success'));
+			return {
+				url,
+				status: SUCCESS
+			};
+		}
+
+		log.info(msg('info'));
+		return {
+			url,
+			status: NOTFOUND
+		};
 	};
+
+	let isFirst = 0;
 
 	return {
 		name: 'vite-plugin-rux',
@@ -203,11 +228,18 @@ export default function Rux({
 			if (!normalizedFile.includes('/src/')) return;
 
 			const fileExtension = path.extname(normalizedFile);
+
 			if (
 				typeof include === 'function'
 					? include(normalizedFile)
 					: include.includes(fileExtension)
 			) {
+				if (++isFirst && isFirst === 1) {
+					log.info(
+						'\n-------------------------------------------------------\n\t\t 📝 COS uploadFile log\n-------------------------------------------------------'
+					);
+				}
+
 				// 只关注获取到的结果
 				const { status, url } = await uploadFile(normalizedFile);
 				if ([SUCCESS, CACHE].includes(status)) {
