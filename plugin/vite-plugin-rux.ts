@@ -100,7 +100,7 @@ export default function Rux({
 	bucket,
 	region,
 	uploadPath,
-	domain = `${bucket}.cos.${region}.myqcloud.com/`,
+	domain = `https://${bucket}.cos.${region}.myqcloud.com/`,
 	include = ['.png', '.jpg', '.jpeg', '.svg', '.gif'],
 	enableMD5FileName = true,
 	enableCache = true,
@@ -141,10 +141,12 @@ export default function Rux({
 	};
 	createCache();
 
-	const getDate = (key: string) => cacheData[key];
+	const getDate = (key: string) => enableCache && !!cacheData[key];
 	const setDate = (key: string, value: any) => {
-		cacheData[key] = value;
-		writeCache(cacheData);
+		if (enableCache) {
+			cacheData[key] = value;
+			writeCache(cacheData);
+		}
 	};
 	// cache end
 
@@ -167,16 +169,16 @@ export default function Rux({
 		const fullFileName = `${enableMD5FileName ? fileMD5Name : fileName}${fileExt}`;
 
 		// cos 上传必要参数
-		const fileKey = path.join(uploadPath ?? projectName, fullFileName);
+		const fileKey = path.join('/', uploadPath ?? projectName, fullFileName);
 		const fileBody = fs.createReadStream(file);
 		const { size: fileSize } = await fs.promises.stat(file);
 
 		// url 处理
 		const url = concatDomainAndPath(domain, fileKey);
-		const msg = (type: LogLevel) => `[${getTime()}] (${type}) ${fullFileName} => ${file}`;
+		const msg = (type: LogLevel) => `[${getTime()}] (${type}) ${file} => ${fileKey}`;
 
 		// 判断是否存在缓存
-		if (enableCache && getDate(fullFileName)) {
+		if (getDate(fileKey)) {
 			log.cache(msg('cache'));
 			return {
 				url,
@@ -203,7 +205,7 @@ export default function Rux({
 		}
 
 		if (data) {
-			setDate(fullFileName, file);
+			setDate(fileKey, file);
 			log.success(msg('success'));
 			return {
 				url,
