@@ -36,63 +36,70 @@ interface IRuxPluginOptions {
 	uploadPath?: string;
 	/**
 	 * 自定义命中文件规则
-	 * @defaultValue ['.png', '.jpg', '.jpeg', '.svg', '.gif']
+	 * @defaultValue `['.png', '.jpg', '.jpeg', '.svg', '.gif']`
 	 */
 	include?: string[] | ((path: string) => boolean);
 	/**
 	 * 是否对上传的文件名称进行 MD5 编码
-	 * @defaultValue true
+	 * @defaultValue `true`
 	 */
 	enableMD5FileName?: boolean;
 	/**
 	 * 是否缓存已上传文件
-	 * @defaultValue true
+	 * @defaultValue `true`
 	 */
 	enableCache?: boolean;
 }
 
-type TUploadFile = {
+type TUploadFileResp = {
 	url: string;
-	status: number;
+	status: StatusCode;
 	message?: string;
 };
 
 type TCacheData = Record<string, string>;
 
-// Log
-const logConfig = {
+type TLogLevel = keyof typeof chalkConfig;
+
+type TLogMethods = {
+	[K in TLogLevel]: (msg: any) => void;
+};
+
+// Log config
+const chalkConfig = {
 	success: chalk.bold.green,
 	cache: chalk.bold.blue,
 	error: chalk.bold.red,
 	info: chalk.bold.gray
 };
 
-type TLogLevel = keyof typeof logConfig;
+const log = Object.keys(chalkConfig).reduce(
+	(acc, cur) => ({
+		...acc,
+		[cur as TLogLevel]: (msg: any) => console.log(chalkConfig[cur as TLogLevel](msg))
+	}),
+	{} as TLogMethods
+);
 
-type TLogMethods = {
-	[K in TLogLevel]: (msg: any) => void;
-};
+const LOG_BANNER =
+	'\n-------------------------------------------------------\n\t\t 📝 COS uploadFile log\n-------------------------------------------------------';
 
-const log = Object.keys(logConfig).reduce((acc, cur) => {
-	acc[cur as TLogLevel] = (msg: any) => console.log(logConfig[cur as TLogLevel](msg));
-	return acc;
-}, {} as TLogMethods);
-
-const SUCCESS = 200,
+enum StatusCode {
+	SUCCESS = 200,
 	CACHE = 304,
 	NOTFOUND = 404,
-	ERROR = 500;
+	ERROR = 500
+}
 
-const concatDomainAndPath = (domain: string, path: string) => {
-	if (domain.endsWith('/')) {
-		domain = domain.slice(0, -1);
-	}
-	if (path.startsWith('/')) {
-		path = path.slice(1);
-	}
-
-	return `${domain}/${path}`;
+const statusCodeLogLevels: Record<StatusCode, TLogLevel> = {
+	[StatusCode.SUCCESS]: 'success',
+	[StatusCode.CACHE]: 'cache',
+	[StatusCode.ERROR]: 'error',
+	[StatusCode.NOTFOUND]: 'info'
 };
+
+const concatDomainAndPath = (domain: string, path: string) =>
+	`${domain.replace(/\/$/, '')}/${path.replace(/^\//, '')}`;
 
 const getTime = () => {
 	const date = new Date();
@@ -156,15 +163,14 @@ export default function Rux({
 	};
 
 	// Async COS.putObject
-	const putObjectSync = (
+	const putObjectPromise = (
 		params: COS.PutObjectParams
 	): Promise<[COS.CosError, COS.PutObjectResult]> => {
-		return new Promise((resolve) => {
-			cos.putObject(params, (...arg) => resolve(arg));
-		});
+		return new Promise((resolve) => cos.putObject(params, (...arg) => resolve(arg)));
 	};
 
-	const uploadFile = async (file: string): Promise<TUploadFile> => {
+	// 只处理上传操作
+	const uploadFile = async (file: string): Promise<TUploadFileResp> => {
 		// 获取文件扩展名
 		const fileExt = path.extname(file);
 		// 获取当前文件名
@@ -178,22 +184,18 @@ export default function Rux({
 		const fileKey = path.join('/', uploadPath ?? projectName, fullFileName);
 		const fileBody = fs.createReadStream(file);
 		const { size: fileSize } = await fs.promises.stat(file);
-
-		// url 处理
+		// 拼接最终展示的 CDN 地址
 		const url = concatDomainAndPath(domain, fileKey);
-		const msg = (type: TLogLevel | `${TLogLevel}: ${string}`) =>
-			`[${getTime()}] (${type}) ${file} => ${fileKey}`;
 
 		// 判断是否存在缓存
 		if (getDate(fileKey)) {
-			log.cache(msg('cache'));
 			return {
 				url,
-				status: CACHE
+				status: StatusCode.CACHE
 			};
 		}
 
-		const [err, data] = await putObjectSync({
+		const [err, data] = await putObjectPromise({
 			Bucket: bucket,
 			Region: region,
 			Key: fileKey,
@@ -203,27 +205,24 @@ export default function Rux({
 
 		if (err) {
 			const message = `${err.code} at ${err.message}`;
-			log.error(msg(`error: ${message}`));
 			return {
 				message,
 				url,
-				status: ERROR
+				status: StatusCode.ERROR
 			};
 		}
 
 		if (data) {
 			setDate(fileKey, file);
-			log.success(msg('success'));
 			return {
 				url,
-				status: SUCCESS
+				status: StatusCode.SUCCESS
 			};
 		}
 
-		log.info(msg('info'));
 		return {
 			url,
-			status: NOTFOUND
+			status: StatusCode.NOTFOUND
 		};
 	};
 
@@ -243,15 +242,18 @@ export default function Rux({
 					? include(normalizedFile)
 					: include.includes(fileExtension)
 			) {
-				if (++isFirst && isFirst === 1) {
-					log.info(
-						'\n-------------------------------------------------------\n\t\t 📝 COS uploadFile log\n-------------------------------------------------------'
-					);
+				if (++isFirst === 1) {
+					log.info(LOG_BANNER);
 				}
 
 				// 只关注获取到的结果
-				const { status, url } = await uploadFile(normalizedFile);
-				if ([SUCCESS, CACHE].includes(status)) {
+				const { status, url, message } = await uploadFile(normalizedFile);
+				// log 统一处理
+				const logLevel = statusCodeLogLevels[status];
+				const logPrefix = message ? `${logLevel}: ${message}` : logLevel;
+				log[logLevel](`[${getTime()}] (${logPrefix}) ${file} => ${url}`);
+
+				if ([StatusCode.SUCCESS, StatusCode.CACHE].includes(status)) {
 					return `export default '${url}';`;
 				}
 			}
