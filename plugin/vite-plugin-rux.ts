@@ -5,7 +5,7 @@ import chalk from 'chalk';
 import COS from 'cos-nodejs-sdk-v5';
 import { normalizePath, type Plugin } from 'vite';
 
-interface RuxPluginOptions {
+interface IRuxPluginOptions {
 	/**
 	 * 身份密钥 ID
 	 * @see {@link https://console.cloud.tencent.com/cam/capi}
@@ -51,26 +51,32 @@ interface RuxPluginOptions {
 	enableCache?: boolean;
 }
 
-interface UploadFileType {
+type TUploadFile = {
 	url: string;
 	status: number;
 	message?: string;
-}
-
-type CacheDataType = Record<string, string>;
-
-//  Log
-type LogLevel = 'success' | 'cache' | 'error' | 'info';
-type LogMethods = {
-	[K in LogLevel]: (msg: any) => void;
 };
-type LogType = typeof console.log & LogMethods;
 
-const log = console.log as LogType;
-log.success = (msg) => log(chalk.bold.green(msg));
-log.cache = (msg) => log(chalk.bold.blue(msg));
-log.error = (msg) => log(chalk.bold.red(msg));
-log.info = (msg) => log(chalk.bold.gray(msg));
+type TCacheData = Record<string, string>;
+
+// Log
+const logConfig = {
+	success: chalk.bold.green,
+	cache: chalk.bold.blue,
+	error: chalk.bold.red,
+	info: chalk.bold.gray
+};
+
+type TLogLevel = keyof typeof logConfig;
+
+type TLogMethods = {
+	[K in TLogLevel]: (msg: any) => void;
+};
+
+const log = Object.keys(logConfig).reduce((acc, cur) => {
+	acc[cur as TLogLevel] = (msg: any) => console.log(logConfig[cur as TLogLevel](msg));
+	return acc;
+}, {} as TLogMethods);
 
 const SUCCESS = 200,
 	CACHE = 304,
@@ -105,27 +111,27 @@ export default function Rux({
 	enableMD5FileName = true,
 	enableCache = true,
 	...options
-}: RuxPluginOptions): Plugin {
-	// init cos
+}: IRuxPluginOptions): Plugin {
+	// Init COS
 	const cos = new COS({
 		SecretId: options.secretId,
 		SecretKey: options.secretKey
 	});
 
-	// 获取项目相关信息
+	// Get project info
 	const projectPath = process.cwd();
 	const projectName = path.basename(projectPath);
 
-	// cache start
+	// Cache setting
 	const cachePath = path.join(projectPath, '.cache.json');
-	let cacheData: CacheDataType = {};
+	let cacheData: TCacheData = {};
 
-	const writeCache = (data: CacheDataType) => {
+	const writeCache = (data: TCacheData) => {
 		const jsonData = JSON.stringify(data, null, 2);
 		fs.writeFileSync(cachePath, jsonData, 'utf-8');
 	};
 
-	const readCache = (): CacheDataType => {
+	const readCache = (): TCacheData => {
 		if (fs.existsSync(cachePath)) {
 			const data = fs.readFileSync(cachePath, 'utf-8');
 			return JSON.parse(data);
@@ -148,8 +154,8 @@ export default function Rux({
 			writeCache(cacheData);
 		}
 	};
-	// cache end
 
+	// Async COS.putObject
 	const putObjectSync = (
 		params: COS.PutObjectParams
 	): Promise<[COS.CosError, COS.PutObjectResult]> => {
@@ -158,7 +164,7 @@ export default function Rux({
 		});
 	};
 
-	const uploadFile = async (file: string): Promise<UploadFileType> => {
+	const uploadFile = async (file: string): Promise<TUploadFile> => {
 		// 获取文件扩展名
 		const fileExt = path.extname(file);
 		// 获取当前文件名
@@ -175,14 +181,15 @@ export default function Rux({
 
 		// url 处理
 		const url = concatDomainAndPath(domain, fileKey);
-		const msg = (type: LogLevel) => `[${getTime()}] (${type}) ${file} => ${fileKey}`;
+		const msg = (type: TLogLevel | `${TLogLevel}: ${string}`) =>
+			`[${getTime()}] (${type}) ${file} => ${fileKey}`;
 
 		// 判断是否存在缓存
 		if (getDate(fileKey)) {
 			log.cache(msg('cache'));
 			return {
 				url,
-				status: 304
+				status: CACHE
 			};
 		}
 
@@ -196,7 +203,7 @@ export default function Rux({
 
 		if (err) {
 			const message = `${err.code} at ${err.message}`;
-			log.error(msg(`error: ${message}` as LogLevel));
+			log.error(msg(`error: ${message}`));
 			return {
 				message,
 				url,
