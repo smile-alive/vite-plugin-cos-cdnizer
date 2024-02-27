@@ -1,31 +1,33 @@
 {
-  "name": "vite-project",
-  "private": true,
-  "version": "0.0.0",
+  "name": "vite-plugin-static-cdnizer",
+  "version": "1.0.0",
+  "description": "一个替换本地静态资源引用为已上传至 CDN 地址的 vite 插件。",
+  "author": "Xi,Xiangru",
+  "homepage": "https://github.com/smile-alive/vite-plugin-static-cdnizer.git",
+  "repository": "https://github.com/smile-alive/vite-plugin-static-cdnizer.git",
+  "license": "ISC",
   "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "keywords": [
+    "vite-plugin",
+    "static",
+    "oss",
+    "cos"
+  ],
+  "files": [
+    "dist"
+  ],
   "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
-    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
-    "preview": "vite preview"
+    "build": "rm -rf dist && tsc"
   },
   "dependencies": {
-    "cos-nodejs-sdk-v5": "^2.13.1",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "chalk": "^5.3.0",
+    "cos-nodejs-sdk-v5": "^2.13.1"
   },
   "devDependencies": {
-    "@types/node": "^20.11.0",
-    "@types/react": "^18.2.55",
-    "@types/react-dom": "^18.2.19",
-    "@typescript-eslint/eslint-plugin": "^6.21.0",
-    "@typescript-eslint/parser": "^6.21.0",
-    "@vitejs/plugin-react": "^4.2.1",
-    "chalk": "^5.3.0",
-    "eslint": "^8.56.0",
-    "eslint-plugin-react-hooks": "^4.6.0",
-    "eslint-plugin-react-refresh": "^0.4.5",
-    "typescript": "^5.2.2",
-    "vite": "^5.1.0"
+    "@types/node": "^20.11.20",
+    "typescript": "^5.3.3",
+    "vite": "^5.1.4"
   }
 }

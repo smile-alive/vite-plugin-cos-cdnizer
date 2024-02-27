@@ -1,33 +1,39 @@
 {
   "compilerOptions": {
-    "target": "ES2020",
-    "useDefineForClassFields": true,
-    "lib": [
-      "ES2020",
-      "DOM",
-      "DOM.Iterable"
-    ],
+    /* 设置生成的 JavaScript 的 JavaScript 语言版本，并包含兼容的库声明。 */
+    "target": "ES5",
+    /* 指定生成的模块代码。 */
     "module": "ESNext",
-    "skipLibCheck": true,
-    /* Bundler mode */
+    /* 指定所有发出文件的输出文件夹。 */
+    "outDir": "./dist",
+    /* 指定 TypeScript 如何从给定的模块规范查找文件。 */
     "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "noEmit": true,
-    "jsx": "react-jsx",
-    /* Linting */
+    /* 从 TypeScript 和 JavaScript 文件生成 .d.ts 文件。 */
+    "declaration": true,
+    "declarationDir": "dist",
+    /* 发出附加的 JavaScript 以便更容易地支持导入 CommonJS 模块。这会为类型兼容性启用 'allowSyntheticDefaultImports'。 */
+    "esModuleInterop": true,
+    /* 确保导入中的大小写正确。 */
+    "forceConsistentCasingInFileNames": true,
+    /* 启用所有严格的类型检查选项。 */
     "strict": true,
+    /* 对于具有暗示的 'any' 类型的表达式和声明启用错误报告。 */
+    "noImplicitAny": true,
+    /* 在类型检查时，考虑 'null' 和 'undefined'。 */
+    "strictNullChecks": true,
+    /* 确保始终发出 'use strict'。 */
+    "alwaysStrict": true,
+    /* 当本地变量未使用时启用错误报告。 */
     "noUnusedLocals": true,
+    /* 当函数参数未使用时引发错误。 */
     "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true
+    /* 跳过所有 .d.ts 文件的类型检查。 */
+    "skipLibCheck": true
   },
   "include": [
     "src"
   ],
-  "references": [
-    {
-      "path": "./tsconfig.node.json"
-    }
+  "exclude": [
+    "node_modules"
   ]
 }

@@ -1,14 +1,13 @@
 import path from 'node:path';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
-import chalk from 'chalk';
 import COS from 'cos-nodejs-sdk-v5';
 import { normalizePath, type Plugin } from 'vite';
+import { concatDomainAndPath, getTime, log, type TLogLevel } from './utils';
 
-interface ICdnizerPluginOptions {
+interface IStaticCdnizerPluginOptions {
 	/**
-	 * 身份密钥 ID
-	 * @see {@link https://console.cloud.tencent.com/cam/capi}
+	 * 身份密钥 ID {@link https://console.cloud.tencent.com/cam/capi}
 	 */
 	secretId: string;
 	/**
@@ -20,33 +19,32 @@ interface ICdnizerPluginOptions {
 	 */
 	bucket: string;
 	/**
-	 * 存储桶所在地域
-	 * @see {@link https://cloud.tencent.com/document/product/436/6224}
+	 * 存储桶所在地域 {@link https://cloud.tencent.com/document/product/436/6224}
 	 */
 	region: string;
 	/**
 	 * 自定义 CDN 域名
-	 * @defaultValue `${bucket}.cos.${region}.myqcloud.com`
+	 * @default `${bucket}.cos.${region}.myqcloud.com`
 	 */
 	domain?: string;
 	/**
 	 * 自定义上传路径
-	 * @defaultValue `${projectName}/${fileName}`
+	 * @default `${projectName}/${fileName}`
 	 */
 	uploadPath?: string;
 	/**
 	 * 自定义命中文件规则
-	 * @defaultValue `['.png', '.jpg', '.jpeg', '.svg', '.gif']`
+	 * @default ['.png', '.jpg', '.jpeg', '.svg', '.gif']
 	 */
 	include?: string[] | ((path: string) => boolean);
 	/**
 	 * 是否对上传的文件名称进行 MD5 编码
-	 * @defaultValue `true`
+	 * @default true
 	 */
 	enableMD5FileName?: boolean;
 	/**
 	 * 是否缓存已上传文件
-	 * @defaultValue `true`
+	 * @default true
 	 */
 	enableCache?: boolean;
 }
@@ -58,28 +56,6 @@ type TUploadFileResp = {
 };
 
 type TCacheData = Record<string, string>;
-
-type TLogLevel = keyof typeof chalkConfig;
-
-type TLogMethods = {
-	[K in TLogLevel]: (msg: any) => void;
-};
-
-// Log config
-const chalkConfig = {
-	success: chalk.bold.green,
-	cache: chalk.bold.blue,
-	error: chalk.bold.red,
-	info: chalk.bold.gray
-};
-
-const log = Object.keys(chalkConfig).reduce(
-	(acc, cur) => ({
-		...acc,
-		[cur as TLogLevel]: (msg: any) => console.log(chalkConfig[cur as TLogLevel](msg))
-	}),
-	{} as TLogMethods
-);
 
 const LOG_BANNER =
 	'\n-------------------------------------------------------\n\t\t 📝 COS uploadFile log\n-------------------------------------------------------';
@@ -98,27 +74,17 @@ const statusCodeLogLevels: Record<StatusCode, TLogLevel> = {
 	[StatusCode.NOTFOUND]: 'info'
 };
 
-const concatDomainAndPath = (domain: string, path: string) =>
-	`${domain.replace(/\/$/, '')}/${path.replace(/^\//, '')}`;
+export default function StaticCdnizerPlugin(options: IStaticCdnizerPluginOptions): Plugin {
+	const {
+		bucket,
+		region,
+		uploadPath,
+		domain = `https://${bucket}.cos.${region}.myqcloud.com/`,
+		include = ['.png', '.jpg', '.jpeg', '.svg', '.gif'],
+		enableMD5FileName = true,
+		enableCache = true
+	} = options;
 
-const getTime = () => {
-	const date = new Date();
-	const hours = String(date.getHours()).padStart(2, '0');
-	const minutes = String(date.getMinutes()).padStart(2, '0');
-	const seconds = String(date.getSeconds()).padStart(2, '0');
-	return `${hours}:${minutes}:${seconds}`;
-};
-
-export default function Cdnizer({
-	bucket,
-	region,
-	uploadPath,
-	domain = `https://${bucket}.cos.${region}.myqcloud.com/`,
-	include = ['.png', '.jpg', '.jpeg', '.svg', '.gif'],
-	enableMD5FileName = true,
-	enableCache = true,
-	...options
-}: ICdnizerPluginOptions): Plugin {
 	// Init COS
 	const cos = new COS({
 		SecretId: options.secretId,
@@ -230,7 +196,7 @@ export default function Cdnizer({
 
 	return {
 		name: 'vite-plugin-static-cdnizer',
-		async transform(code, file) {
+		async transform(_code, file) {
 			const normalizedFile = normalizePath(file);
 			// 只对 src 下的文件进行处理
 			if (!normalizedFile.includes('/src/')) return;
