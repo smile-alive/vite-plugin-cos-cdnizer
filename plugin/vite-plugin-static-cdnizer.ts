@@ -5,7 +5,7 @@ import chalk from 'chalk';
 import COS from 'cos-nodejs-sdk-v5';
 import { normalizePath, type Plugin } from 'vite';
 
-interface IRuxPluginOptions {
+interface ICdnizerPluginOptions {
 	/**
 	 * 身份密钥 ID
 	 * @see {@link https://console.cloud.tencent.com/cam/capi}
@@ -109,7 +109,7 @@ const getTime = () => {
 	return `${hours}:${minutes}:${seconds}`;
 };
 
-export default function Rux({
+export default function Cdnizer({
 	bucket,
 	region,
 	uploadPath,
@@ -118,7 +118,7 @@ export default function Rux({
 	enableMD5FileName = true,
 	enableCache = true,
 	...options
-}: IRuxPluginOptions): Plugin {
+}: ICdnizerPluginOptions): Plugin {
 	// Init COS
 	const cos = new COS({
 		SecretId: options.secretId,
@@ -229,7 +229,7 @@ export default function Rux({
 	let isFirst = 0;
 
 	return {
-		name: 'vite-plugin-rux',
+		name: 'vite-plugin-static-cdnizer',
 		async transform(code, file) {
 			const normalizedFile = normalizePath(file);
 			// 只对 src 下的文件进行处理
