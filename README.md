@@ -1,18 +1,18 @@
-# vite-plugin-static-cdnizer
+# vite-plugin-cos-cdnizer
 
 > 在日常开发中，经常需要将静态资源上传到云服务的对象存储中。传统方式需要开发者手动登录云服务器控制台进行上传，步骤繁琐。使用本插件后，开发者可以将静态资源放置在项目本地，插件将自动将这些资源上传到对象存储中。同时，插件会自动替换代码中的 `import xxx from 'xxx.png'` 为 CDN 地址，简化了开发流程，提高了效率。
 
 ## 安装
 
 ```base
-npm install vite-plugin-static-cdnizer -D
+npm install vite-plugin-cos-cdnizer -D
 ```
 
 ## 基本使用
 
 ```ts
 import { defineConfig } from 'vite';
-import cdnizer from 'vite-plugin-static-cdnizer';
+import cdnizer from 'vite-plugin-cos-cdnizer';
 
 export default defineConfig({
 	plugins: [

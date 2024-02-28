@@ -12,15 +12,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # 第一步：获取分支的代码
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
       # 第二步：设置 Node.js 环境并指定所需的版本
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: "20.x"
-          registry-url: https://registry.npmjs.org/
 
       # 第三步：安装项目依赖项
       - name: Install
@@ -32,6 +31,8 @@ jobs:
 
       # 第五步：将打包后的文件发布到 NPM
       - name: Publish to NPM
-        run: npm publish
+        run: |
+          npm config set //registry.npmjs.org/:_authToken=$NPM_TOKEN
+          npm publish
         env:
-          NPM_TOKEN: ${{ secrets.ROCKET_CDN_NPM_TOKEN }}
+          NPM_TOKEN: ${{ secrets.VITE_PLUGIN_COS_CDNIZER_NPM_TOKEN }}

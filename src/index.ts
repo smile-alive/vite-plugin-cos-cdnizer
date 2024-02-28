@@ -195,7 +195,7 @@ export default function StaticCdnizerPlugin(options: IStaticCdnizerPluginOptions
 	let isFirst = 0;
 
 	return {
-		name: 'vite-plugin-static-cdnizer',
+		name: 'vite-plugin-cos-cdnizer',
 		async transform(_code, file) {
 			const normalizedFile = normalizePath(file);
 			// 只对 src 下的文件进行处理
