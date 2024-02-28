@@ -1,6 +1,8 @@
 # vite-plugin-cos-cdnizer
 
-> 在日常开发中，经常需要将静态资源上传到云服务的对象存储中。传统方式需要开发者手动登录云服务器控制台进行上传，步骤繁琐。使用本插件后，开发者可以将静态资源放置在项目本地，插件将自动将这些资源上传到对象存储中。同时，插件会自动替换代码中的 `import xxx from 'xxx.png'` 为 CDN 地址，简化了开发流程，提高了效率。
+> 在日常开发中，经常需要将静态资源上传到云服务的对象存储中。传统方式需要开发者手动登录云服务器控制台进行上传，步骤繁琐。
+
+使用本插件后，只需要将静态资源放置在项目本地，插件将自动将命中的资源上传到对象存储中。同时，插件会自动将代码中的 import xxx from 'xxx.png' 替换为 CDN 地址，简化开发流程。
 
 ## 安装
 
@@ -27,11 +29,21 @@ export default defineConfig({
 });
 ```
 
-<br>
+## 效果展示
+
+插件会自动将本地引入的静态资源上传至 CDN，并替换原有代码中的引用地址为 CDN 地址。
+
+### 使用前
+
+![image-20240228下午63239358](https://static.rux.ink/uPic/image-20240228%E4%B8%8B%E5%8D%8863239358.png)
+
+### 使用后
+
+![image-20240228下午63154556](https://static.rux.ink/uPic/image-20240228%E4%B8%8B%E5%8D%8863154556.png)
 
 ![success](https://static.rux.ink/uPic/success.gif)
 
-> 已上传的文件会自动创建 `.cache.json` 进行记录，以便减少无用上传。
+> 插件会自动创建 `.cache.json` 文件进行记录，以减少无用的重复上传。
 
 ![cache](https://static.rux.ink/uPic/cache.gif)
 

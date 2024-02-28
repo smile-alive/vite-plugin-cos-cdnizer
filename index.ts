@@ -2,8 +2,8 @@ import path from 'node:path';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 import COS from 'cos-nodejs-sdk-v5';
+import chalk from 'chalk';
 import { normalizePath, type Plugin } from 'vite';
-import { concatDomainAndPath, getTime, log, type TLogLevel } from './utils';
 
 interface IStaticCdnizerPluginOptions {
 	/**
@@ -57,6 +57,28 @@ type TUploadFileResp = {
 
 type TCacheData = Record<string, string>;
 
+type TLogLevel = keyof typeof chalkConfig;
+
+type TLogMethods = {
+	[K in TLogLevel]: (msg: any) => void;
+};
+
+// Log config
+const chalkConfig = {
+	success: chalk.bold.green,
+	cache: chalk.bold.blue,
+	error: chalk.bold.red,
+	info: chalk.bold.gray
+};
+
+const logger = Object.keys(chalkConfig).reduce(
+	(acc, cur) => ({
+		...acc,
+		[cur as TLogLevel]: (msg: any) => console.log(chalkConfig[cur as TLogLevel](msg))
+	}),
+	{} as TLogMethods
+);
+
 const LOG_BANNER =
 	'\n-------------------------------------------------------\n\t\t 📝 COS uploadFile log\n-------------------------------------------------------';
 
@@ -72,6 +94,17 @@ const statusCodeLogLevels: Record<StatusCode, TLogLevel> = {
 	[StatusCode.CACHE]: 'cache',
 	[StatusCode.ERROR]: 'error',
 	[StatusCode.NOTFOUND]: 'info'
+};
+
+const concatDomainAndPath = (domain: string, path: string) =>
+	`${domain.replace(/\/$/, '')}/${path.replace(/^\//, '')}`;
+
+export const getTime = () => {
+	const date = new Date();
+	const hours = String(date.getHours()).padStart(2, '0');
+	const minutes = String(date.getMinutes()).padStart(2, '0');
+	const seconds = String(date.getSeconds()).padStart(2, '0');
+	return `${hours}:${minutes}:${seconds}`;
 };
 
 export default function StaticCdnizerPlugin(options: IStaticCdnizerPluginOptions): Plugin {
@@ -209,15 +242,15 @@ export default function StaticCdnizerPlugin(options: IStaticCdnizerPluginOptions
 					: include.includes(fileExtension)
 			) {
 				if (++isFirst === 1) {
-					log.info(LOG_BANNER);
+					logger.info(LOG_BANNER);
 				}
 
 				// 只关注获取到的结果
 				const { status, url, message } = await uploadFile(normalizedFile);
-				// log 统一处理
+				// logger 统一处理
 				const logLevel = statusCodeLogLevels[status];
 				const logPrefix = message ? `${logLevel}: ${message}` : logLevel;
-				log[logLevel](`[${getTime()}] (${logPrefix}) ${file} => ${url}`);
+				logger[logLevel](`[${getTime()}] (${logPrefix}) ${file} => ${url}`);
 
 				if ([StatusCode.SUCCESS, StatusCode.CACHE].includes(status)) {
 					return `export default '${url}';`;
