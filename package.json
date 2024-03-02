@@ -1,0 +1,35 @@
+{
+  "name": "vite-plugin-cos-cdnizer",
+  "version": "1.0.0",
+  "description": "一个替换本地静态资源引用为已上传至 CDN 地址的 vite 插件。",
+  "author": "Xi,Xiangru",
+  "homepage": "https://github.com/smile-alive/vite-plugin-cos-cdnizer.git",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/smile-alive/vite-plugin-cos-cdnizer.git"
+  },
+  "license": "ISC",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "keywords": [
+    "vite-plugin",
+    "static",
+    "oss",
+    "cos"
+  ],
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "rm -rf dist && tsc"
+  },
+  "dependencies": {
+    "chalk": "^5.3.0",
+    "cos-nodejs-sdk-v5": "^2.13.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.20",
+    "typescript": "^5.3.3"
+  }
+}

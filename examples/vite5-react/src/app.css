@@ -1,0 +1,48 @@
+body {
+	min-block-size: 100%;
+}
+
+img {
+	max-block-size: 80dvh;
+}
+
+.compare {
+	display: grid;
+}
+
+.before,
+.after {
+	display: grid;
+	place-content: center;
+	grid-area: 1 / 1;
+}
+
+.before {
+	clip-path: inset(0 calc(100% - var(--pos, 50%)) 0 0);
+}
+
+.after {
+	clip-path: inset(0 0 0 var(--pos, 50%));
+}
+
+input[type='range'] {
+	z-index: 1;
+	appearance: none;
+	background: transparent;
+	cursor: pointer;
+	grid-area: 1 / 1;
+
+	&::-webkit-slider-thumb {
+		appearance: none;
+		width: 4px;
+		height: 100dvh;
+		background-color: CanvasText;
+	}
+
+	&::-moz-range-thumb {
+		appearance: none;
+		width: 4px;
+		height: 100dvh;
+		background-color: CanvasText;
+	}
+}

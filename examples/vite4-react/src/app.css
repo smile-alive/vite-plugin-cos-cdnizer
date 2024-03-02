@@ -1,0 +1,85 @@
+#root {
+	display: grid;
+	place-content: center;
+	min-height: 100dvh;
+	background: #000;
+}
+
+.container {
+	display: grid;
+	grid-template-columns: 1fr 1fr 1fr 1fr 1fr;
+	gap: 1em;
+	width: 800px;
+	height: 500px;
+	transition: all 300ms;
+}
+
+.container:hover .box {
+	filter: grayscale(100%) opacity(30%);
+}
+
+.box {
+	position: relative;
+	background: var(--img) center center;
+	background-size: cover;
+	transition: all 300ms;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	border-radius: 2px;
+}
+
+.container .box:hover {
+	filter: grayscale(0%) opacity(100%);
+}
+
+.container:has(.box:nth-child(1):hover) {
+	grid-template-columns: 3fr 1fr 1fr 1fr 1fr;
+}
+
+.container:has(.box:nth-child(2):hover) {
+	grid-template-columns: 1fr 3fr 1fr 1fr 1fr;
+}
+
+.container:has(.box:nth-child(3):hover) {
+	grid-template-columns: 1fr 1fr 3fr 1fr 1fr;
+}
+
+.container:has(.box:nth-child(4):hover) {
+	grid-template-columns: 1fr 1fr 1fr 3fr 1fr;
+}
+
+.container:has(.box:nth-child(5):hover) {
+	grid-template-columns: 1fr 1fr 1fr 1fr 3fr;
+}
+
+.box:nth-child(odd) {
+	transform: translateY(-16px);
+}
+
+.box:nth-child(even) {
+	transform: translateY(16px);
+}
+
+.box::after {
+	content: attr(data-name);
+	position: absolute;
+	bottom: -20px;
+	background: #000;
+	color: #fff;
+	padding: 12px;
+	line-height: 1;
+	letter-spacing: 4px;
+	text-transform: uppercase;
+	opacity: 0;
+	transition: all 300ms;
+	font-family: 'Figtree', sans-serif;
+	pointer-events: none;
+	border-radius: 2px;
+}
+
+.box:hover::after {
+	bottom: 20px;
+	opacity: 70%;
+	transition-delay: 150ms;
+}
